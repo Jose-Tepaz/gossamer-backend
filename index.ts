@@ -14,6 +14,7 @@ app.use("/api/snaptrade", snaptradeRoutes);
 const PORT = Number(process.env.PORT) || 4000;
 
 const startServer = (port: number): Promise<void> => {
+
   return new Promise((resolve, reject) => {
     const server = app.listen(port)
       .on('listening', () => {
