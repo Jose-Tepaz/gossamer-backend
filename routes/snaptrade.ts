@@ -13,40 +13,97 @@ class SnapTradeError extends Error {
   ) {
     super(message);
     this.name = 'SnapTradeError';
+  
   }
 }
 
 const router = express.Router();
 
-const snaptrade = new Snaptrade({
-  clientId: process.env.CLIENT_ID!,
-  consumerKey: process.env.CONSUMER_SECRET!,
-});
+// Log de configuración
+console.log('🔧 Configuración de SnapTrade:');
+console.log('CLIENT_ID:', process.env.CLIENT_ID ? '✅ Configurado' : '❌ No configurado');
+console.log('CONSUMER_SECRET:', process.env.CONSUMER_SECRET ? '✅ Configurado (usado como consumerKey)' : '❌ No configurado');
+
+// Verificar que las variables estén configuradas antes de inicializar
+if (!process.env.CLIENT_ID || !process.env.CONSUMER_SECRET) {
+  console.error('❌ Variables de entorno faltantes para SnapTrade');
+  console.error('Asegúrate de tener CLIENT_ID y CONSUMER_SECRET en tu .env');
+  process.exit(1);
+}
+
+let snaptrade: Snaptrade;
+
+try {
+  console.log('🔄 Inicializando cliente de SnapTrade...');
+  snaptrade = new Snaptrade({
+    clientId: process.env.CLIENT_ID!,
+    consumerKey: process.env.CONSUMER_SECRET!,
+  });
+  console.log('✅ Cliente de SnapTrade inicializado correctamente');
+} catch (error) {
+  console.error('❌ Error inicializando SnapTrade:', error);
+  process.exit(1);
+}
 
 router.post("/register-user", async (req: Request, res: Response, next: express.NextFunction) => {
+  console.log('📨 POST /register-user - Iniciando...');
+  console.log('Body recibido:', req.body);
+  
   const { userId } = req.body;
 
   if (!userId) {
-    throw new SnapTradeError(400, "userId es requerido");
+    console.log('❌ userId faltante');
+    return res.status(400).json({ error: "userId es requerido" });
   }
 
   try {
-    const response = await snaptrade.authentication.registerSnapTradeUser({ userId });
+    console.log('🔄 Llamando a SnapTrade API para registrar usuario:', userId);
+    console.log('🔧 Configuración del SDK:');
+    console.log('- CLIENT_ID:', process.env.CLIENT_ID ? 'Configurado' : 'No configurado');
+    console.log('- CONSUMER_SECRET:', process.env.CONSUMER_SECRET ? 'Configurado' : 'No configurado');
+    
+    const response = await snaptrade.authentication.registerSnapTradeUser({ 
+      userId: userId.toString() 
+    });
+    console.log('✅ Respuesta de SnapTrade recibida');
+    console.log('✅ Response status:', response.status);
+    console.log('✅ Response data:', JSON.stringify(response.data, null, 2));
+    
     const { userId: returnedUserId, userSecret } = response.data;
+    console.log('✅ Usuario registrado exitosamente:', returnedUserId);
 
     return res.status(200).json({
       userId: returnedUserId,
       userSecret,
     });
   } catch (error: any) {
+    console.error('❌ Error completo:', error);
+    console.error('❌ Error en registerSnapTradeUser:', error.message);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error stack:', error.stack);
+    
+    // Intentar acceder a diferentes propiedades del error
+    if (error.response) {
+      console.error('❌ Response status:', error.response.status);
+      console.error('❌ Response data:', JSON.stringify(error.response.data, null, 2));
+      console.error('❌ Response headers:', JSON.stringify(error.response.headers, null, 2));
+    }
+    
+    if (error.request) {
+      console.error('❌ Request:', error.request);
+    }
+    
     const errorMessage = error.response?.data?.message || error.message;
     const errorDetails = error.response?.data || {};
     
-    throw new SnapTradeError(
-      error.response?.status || 500,
-      errorMessage,
-      errorDetails
-    );
+    // No hacer throw, devolver el error como respuesta JSON
+    return res.status(error.response?.status || 500).json({
+      error: true,
+      message: errorMessage,
+      details: errorDetails,
+      snaptradeError: true,
+      fullError: error.toString()
+    });
   }
 });
 
@@ -117,6 +174,20 @@ router.get("/list-users", async (req: Request, res: Response, next: express.Next
 );
 
 // Endpoint para eliminar un usuario de SnapTrade
+/**
+ * Espera una solicitud DELETE a /delete-user con el siguiente formato en el body (JSON):
+ * {
+ *   "userId": "string" // El ID único del usuario que se desea eliminar en SnapTrade
+ * }
+ * 
+ * Ejemplo de uso con fetch:
+ * fetch('/api/snaptrade/delete-user', {
+ *   method: 'DELETE',
+ *   headers: { 'Content-Type': 'application/json' },
+ *   body: JSON.stringify({ userId: 'usuario123' })
+ * })
+ */
+
 router.delete("/delete-user", async (req: Request, res: Response, next: express.NextFunction) => {
   console.log("DELETE /delete-user endpoint reached");
   const { userId } = req.body;
